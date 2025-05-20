@@ -10,112 +10,130 @@ created: 2015-11-22
 
 ### Abstract
 
-This EIP makes it possible to call functions that return strings and other dynamically-sized arrays.
-Currently, when another contract / function is called from inside the Ethereum Virtual Machine,
-the size of the output has to be specified in advance. It is of course possible to give a larger
-size, but gas also has to be paid for memory that is not written to, which makes returning
-dynamically-sized data both costly and inflexible to the extent that it is actually unusable.
+* goal
+  * enable call functions / return strings & other dynamically-sized arrays
 
-The solution proposed in this EIP is to charge gas only for memory that is actually written to at
-the time the `CALL` returns.
+* CURRENTLY, 
+  * 👀| EVM, if you call ANOTHER contract / function -> output's size needs to be specified in advance👀
+    * Reason: 🧠
+      * you can give larger size
+      * gas has to be paid -- for -- memory / NOT written to -> returning DYNAMICALLY-sized data to extent is costly & inflexible🧠 
+
+* proposed solution
+  * charge gas ONLY -- for -- memory / actually written | time the `CALL` returns
 
 ### Specification
 
-The gas and memory semantics for `CALL`, `CALLCODE` and `DELEGATECALL` (called later as `CALL*`)
-are changed in the following way (`CREATE` does not write to memory and is thus unaffected):
-
-Suppose the arguments to `CALL*` are `gas, address, value, input_start, input_size, output_start, output_size`,
-then, at the beginning of the opcode, gas for growing memory is only charged for `input_start + input_size`, but not
-for `output_start + output_size`.
-
-If the called contract returns data of size `n`, the memory of the calling contract is grown to
-`output_start + min(output_size, n)` (and the calling contract is charged gas for that) and the
-output is written to the area `[output_start, output_start + min(n, output_size))`.
-
-The calling contract can run out of gas both at the beginning of the opcode and at the end
-of the opcode.
-
-After the call, the `MSIZE` opcode should return the size the memory was actually grown to.
+* `CALL*`
+  * == `CALL`, `CALLCODE` & `DELEGATECALL`
+  * == gas & memory semantics /
+    * `CREATE` does NOT charge
+      * Reason: 🧠NOT write -- to -- memory 🧠
+    * way to be charged
+      * if `CALL*`'s arguments are `gas, address, value, input_start, input_size, output_start, output_size` -> | beginning of the opcode, gas for growing memory is charged -- 
+        * for --`input_start + input_size`
+        * ❌NOT for -- `output_start + output_size` ❌
+      * if the called contract returns data / size `n` ->
+        * calling contract's memory -- is grown to -- `output_start + min(output_size, n)`
+          * -> calling contract is charged -- for -- that gas
+        * output is written | `[output_start, output_start + min(n, output_size))`
+      * calling contract can run out of gas | 
+        * beginning of the opcode 
+        * end of the opcode
+    * AFTER the call, 
+      * `MSIZE` opcode == memory's size / was actually grown to
 
 ### Motivation
 
-In general, it is good practice to reserve a certain memory area for the output of a call,
-because letting a subroutine write to arbitrary areas in memory might be dangerous. On the
-other hand, it is often hard to know the output size of a call prior to performing the call:
-The data could be in the storage of another contract which is generally inaccessible and
-determining its size would require another call to that contract.
+* recommendations
+  * reserve certain memory area -- for the -- call's output
+    * Reason: 🧠letting a subroutine write | arbitrary areas in memory -- might be -- dangerous🧠
 
-Furthermore, charging gas for areas of memory that are not actually written to is unnecessary.
+* | in advance (== BEFORE performing the call), 
+  * know the call's output size is DIFFICULT
+    * Reason: 🧠data could be | ANOTHER contract's storage / generally INACCESSIBLE 
+      * if you want to determine its size -> you would require ANOTHER call | that contract 🧠
+  * charging gas | areas of memory / NOT actually written
+    * unnecessary
 
-This proposal tries to solve both problems: A caller can choose to provide a gigantic area of
-memory at the end of their memory area. The callee can "write" to it by returning and the
-caller is only charged for the memory area that is actually written.
+* proposal
+  * | end of memory area, caller can provide -- a -- gigantic area of memory 
+  * callee can -- , by returning, -- "write" | it
+  * caller is ONLY charged -- for the -- memory area / ACTUALLY written
 
-This makes it possible to return dynamic data like strings and dynamically-sized arrays
-in a very flexible way. It is even possible to determine the size of the returned data:
-If the caller uses `output_start = MSIZE` and `output_size = 2**256-1`, the area of
-memory that was actually written to is `(output_start, MSIZE)` (here, `MSIZE` as evaluated
-after the call). This is important because it allows "proxy" contracts
-which call other contracts whose interface they do not know and just return their output,
-i.e. they both forward the input and the output. For this, it is important that the caller
-(1) does not need to know the size of the output in advance and (2) can determine the
-size of the output after the call.
-
+* -> makes possible
+  * return flexibly dynamic data -- like -- strings & dynamically-sized arrays
+  * determine the returned data's size
+    * if the caller uses `output_start = MSIZE` & `output_size = 2**256-1` -> area of memory / written == `(output_start, MSIZE)`
+      * `MSIZE` is evaluated | AFTER the call
+  * "proxy" contracts
+    * == contracts / call OTHER contracts /
+      * interface they do NOT know
+      * ONLY return their output,
 
 ### Rationale
 
-This way of dealing with the problem requires a minimal change to the Ethereum Virtual Machine.
-Other means of achieving a similar goal would have changed the opcodes themselves or
-the number of their arguments. Another possibility would have been to only change the
-gas mechanics if `output_size` is equal to `2**256-1`. Since the main difficulty in the
-implementation is that memory has to be enlarged at two points in the code around `CALL`,
-this would not have been a simplification.
+* proposal's implications
+  * change the Ethereum Virtual Machine
 
-At an earlier stage, it was proposed to also add the size of the returned data on the stack,
-but the `MSIZE` mechanism described above should be sufficient and is much better
-backwards compatible.
+* ALTERNATIVES
+  * would have changed the
+    * opcodes themselves OR
+    * number of opcodes' arguments
+  * if `output_size` == `2**256-1` -> ONLY change the gas mechanics
+    * MORE complex
+      * Reason: 🧠| implementation, MAIN difficulty : enlarge memory has | 2 parts in the code -- around -- `CALL`🧠
+  * | stack, add the returned data's size
+    * Reason of rejection: 🧠vs `MSIZE` mechanism
+      * NOT sufficient
+      * worst -- for -- backwards compatibility🧠
 
-Some comments are available at https://github.com/ethereum/EIPs/issues/8
+* see https://github.com/ethereum/EIPs/issues/8
 
 ### Backwards Compatibility
 
-This proposal changes the semantics of contracts because contracts can access the gas counter
-and the size of memory.
+* this proposal -- changes the -- semantics of contracts
+  * Reason: 🧠contracts -- can access the -- gas counter & memory's size 🧠
 
-On the other hand, it is unlikely that existing contracts will suffer from this change due to
-the following reasons:
-
-Gas:
-
-The VM will not charge more gas than before. Usually, contracts are written in a way such
-that their semantics do not change if they use up less gas. If more gas were used, contracts
-might go out-of-gas if they perform a tight estimation for gas needed by sub-calls. Here,
-contracts might only return more gas to their callers.
-
-Memory size:
-
-The `MSIZE` opcode is typically used to allocate memory at a previously unused spot.
-The change in semantics affects existing contracts in two ways:
-
-1. Overlaps in allocated memory. By using `CALL`, a contract might have wanted to allocate
-   a certain slice of memory, even if that is not written to by the called contract.
-   Subsequent uses of `MSIZE` to allocate memory might overlap with this slice that is
-   now smaller than before the change. It is though unlikely that such contracts exist.
-
-2. Memory addresses change. Rather general, if memory is allocated using `MSIZE`, the
-   addresses of objects in memory will be different after the change. Contract should
-   all be written in a way, though, such that objects in memory are _relocatable_,
-   i.e. their absolute position in memory and their relative position to other
-   objects does not matter. This is of course not the case for arrays, but they
-   are allocated in a single allocation and not with an intermediate `CALL`.
-
+* 👀| EXISTING contracts, unlike to suffer this change 👀
+  * Reason: 🧠
+    * Gas
+      * VM will NOT charge MORE gas
+      * if contracts use up LESS gas -- , due to how usually contracts are written, -> contracts' semantics do NOT change 
+      * if MORE gas were used & perform a tight estimation for gas needed by sub-calls -> contracts might go out-of-gas
+      * contracts might -- , via this approach, -- ONLY return MORE gas | their callers
+    * Memory size
+      * `MSIZE` opcode
+        * uses
+          * | PREVIOUSLY unused spot, allocate memory 
+      *  if semantics change -> | EXISTING contracts, affect
+        1. overlaps | allocated memory
+           * contract might have wanted -- , via `CALL`, -- to allocate a certain slice of memory
+             * even if that is NOT written to -- by the -- called contract
+             * subsequent uses of `MSIZE` to allocate memory -- might overlap with -- this slice /
+               * NOW -- smaller than -- BEFORE the change
+           * unlikely / contracts exist (TODO: ❓)
+        2. Memory addresses change
+           * if memory is allocated via `MSIZE` -> | CURRENTLY, addresses of objects in memory != | AFTER the change, addresses of objects in memory
+           * 👀contract should be written / objects in memory are _relocatable_👀
+             * == NOT care, their
+               * absolute position | memory
+               * relative position -- to -- other objects
+           * NOT affect arrays
+             * Reason: 🧠they are allocated 
+               * | 1! allocation
+               * NOT -- via -- intermediate `CALL`🧠
 
 ### Implementation
 
-VM implementers should take care not to grow the memory until the end of the call and after a check that sufficient
-gas is still available. Typical uses of the EIP include "reserving" `2**256-1` bytes of memory for the output.
+* recommendations
+  * | VM implementers, NOT to grow the memory 
+    * UNTIL end of the call
+    * AFTER checking sufficient gas is STILL AVAILABLE
 
-Python implementation:
+* uses
+  * "reserving" `2**256-1` bytes of memory -- for the -- output
 
-  old: http://vitalik.ca/files/old.py
-  new: http://vitalik.ca/files/new.py
+* Python implementation -- TODO: Where ❓--
+  * old: http://vitalik.ca/files/old.py
+  * new: http://vitalik.ca/files/new.py
