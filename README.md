@@ -7,6 +7,8 @@
       * NEW ERCs & updates -> | [ERC repository](https://github.com/ethereum/ercs)
     * goal
       * 💡standardize Ethereum's documentation & conventions (past & ongoing)💡
+        * == “source of truth”
+        * == technical specifications
 
 * [EIP-1](https://eips.ethereum.org/EIPS/eip-1)
   * how to publish
